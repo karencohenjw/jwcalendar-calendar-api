@@ -1,0 +1,53 @@
+name: Verify deployed calendar API
+
+on:
+  workflow_dispatch:
+
+jobs:
+  verify-live-endpoint:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Fetch and validate the live JSON endpoint
+        run: |
+          python - <<'PY'
+          import calendar
+          import datetime as dt
+          import json
+          from urllib.request import Request, urlopen
+
+          url = "https://karencohenjw.github.io/jwcalendar-calendar-api/api/v1/year/2027.json"
+          request = Request(url, headers={"Accept": "application/json"})
+          with urlopen(request, timeout=30) as response:
+              status = response.status
+              content_type = response.headers.get_content_type()
+              payload = response.read()
+
+          print(f"HTTP status: {status}")
+          print(f"Content-Type: {content_type}")
+          assert status == 200
+          assert content_type == "application/json"
+
+          data = json.loads(payload)
+          assert data["api"] == "JW Calendar"
+          assert data["version"] == "1.0.0"
+          assert data["year"] == 2027
+          assert data["calendar"] == "Gregorian"
+          assert data["leap_year"] is False
+          assert data["website"] == "https://jwcalendar.com/"
+          assert len(data["months"]) == 12
+
+          for month in data["months"]:
+              number = month["number"]
+              assert month["days"] == calendar.monthrange(2027, number)[1]
+              assert month["first_weekday"] == dt.date(2027, number, 1).strftime("%A")
+
+          assert data["months"][0]["days"] == 31
+          assert data["months"][0]["first_weekday"] == "Friday"
+          assert data["months"][1]["days"] == 28
+          assert data["months"][1]["first_weekday"] == "Monday"
+          assert data["months"][11]["days"] == 31
+          assert data["months"][11]["first_weekday"] == "Wednesday"
+          print("Validated Gregorian 2027 metadata for all 12 months.")
+          PY
